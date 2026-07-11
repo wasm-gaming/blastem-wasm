@@ -22,7 +22,7 @@ docker run --rm \
       echo 'Installing wget and tar...'
       apt-get update -qq && apt-get install -y wget tar -qq
       echo 'Fetching BlastEm source archive...'
-      BLASTEM_ARCHIVE_URL="${BLASTEM_ARCHIVE_URL:-https://www.retrodev.com/repos/blastem/archive/tip.tar.gz}"
+      BLASTEM_ARCHIVE_URL="\${BLASTEM_ARCHIVE_URL:-https://www.retrodev.com/repos/blastem/archive/tip.tar.gz}"
       wget -q \"$BLASTEM_ARCHIVE_URL\" -O blastem-src.tar.gz
       tar -xzf blastem-src.tar.gz --strip-components=1
       rm -f blastem-src.tar.gz
