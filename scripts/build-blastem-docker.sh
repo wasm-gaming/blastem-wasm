@@ -18,20 +18,31 @@ docker run --rm \
     -w /workspace \
     emscripten/emsdk:latest \
     bash -c "
-      echo 'Installing mercurial and wget...'
-      apt-get update -qq && apt-get install -y mercurial wget -qq
-      echo 'Cloning BlastEm...'
-      hg clone https://www.retrodev.com/repos/blastem/ .
+      set -euo pipefail
+      echo 'Installing wget and tar...'
+      apt-get update -qq && apt-get install -y wget tar -qq
+      echo 'Fetching BlastEm source archive...'
+      BLASTEM_ARCHIVE_URL="${BLASTEM_ARCHIVE_URL:-https://www.retrodev.com/repos/blastem/archive/tip.tar.gz}"
+      wget -q \"$BLASTEM_ARCHIVE_URL\" -O blastem-src.tar.gz
+      tar -xzf blastem-src.tar.gz --strip-components=1
+      rm -f blastem-src.tar.gz
+      test -f Makefile
       echo 'Patching Makefile...'
       sed -i 's/-Werror=pointer-arith//g' Makefile
       sed -i 's/-Werror=implicit-function-declaration//g' Makefile
       echo 'CFLAGS += -Wno-incompatible-pointer-types -Wno-implicit-function-declaration' >> Makefile
-      echo 'Patching emscripten_pre.js to defer callMain to the SDK...'
-      sed -i 's/Module.callMain();/if (Module.__autoStart) Module.callMain();/g' emscripten_pre.js
+      if [ -f emscripten_pre.js ]; then
+        echo 'Patching emscripten_pre.js to defer callMain to the SDK...'
+        sed -i 's/Module.callMain();/if (Module.__autoStart) Module.callMain();/g' emscripten_pre.js
+      else
+        echo 'emscripten_pre.js not found; skipping callMain patch.'
+      fi
       echo 'Downloading a valid TTF font for BlastEm UI...'
       wget -q https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf -O DroidSans.ttf
       echo 'Running emmake...'
       emmake make CPU=wasm
+      test -f blastem.js
+      test -f blastem.wasm
       echo 'Done building.'
     "
 
