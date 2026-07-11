@@ -54,7 +54,10 @@ export type BlastemLoadConfig = EngineConfig & {
  * Ensure the canvas used by BlastEm has `id="canvas"`.
  * Emscripten SDL2 queries `document.querySelector('#canvas')` to locate its render target.
  */
-function prepareCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+function prepareCanvas(
+  canvas: HTMLCanvasElement,
+  renderFilter: Required<BlastemOptions>['renderFilter'],
+): HTMLCanvasElement {
   if (canvas.id !== 'canvas') {
     // Clone or alias — prefer aliasing so the caller's reference remains valid.
     canvas.id = 'canvas';
@@ -68,6 +71,18 @@ function prepareCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
   // a tiny (e.g. 5x5) window. Host pages should decorate a wrapper instead.
   canvas.style.border = '0';
   canvas.style.padding = '0';
+
+  if (renderFilter === 'pixelated') {
+    // Keep retro pixels crisp when CSS scales the output.
+    canvas.style.imageRendering = 'pixelated';
+    if (!canvas.style.imageRendering) {
+      // Fallback for older engines.
+      canvas.style.imageRendering = 'crisp-edges';
+    }
+  } else {
+    canvas.style.imageRendering = 'auto';
+  }
+
   return canvas;
 }
 
@@ -102,7 +117,7 @@ export async function load(config: BlastemLoadConfig): Promise<EngineInstance> {
     throw new Error('blastem: no ROM bytes provided — pass assets.rom');
   }
 
-  prepareCanvas(canvas);
+  prepareCanvas(canvas, opts.renderFilter);
 
   const jsUrl = config.jsUrl ?? new URL('./blastem.js', import.meta.url).href;
   const wasmUrl = new URL('./blastem.wasm', jsUrl).href;

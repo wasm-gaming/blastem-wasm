@@ -5,11 +5,14 @@ export interface BlastemOptions {
   romFileName?: string;
   /** Region hint for the emulator (auto-detected if not set). */
   region?: 'auto' | 'us' | 'eu' | 'jp';
+  /** Canvas scaling filter: `pixelated` for crisp pixels, `smooth` for linear filtering. */
+  renderFilter?: 'pixelated' | 'smooth';
 }
 
 export const DEFAULT_BLASTEM_OPTIONS: Required<BlastemOptions> = {
   romFileName: 'game.bin',
   region: 'auto',
+  renderFilter: 'pixelated',
 };
 
 export const BLASTEM_OPTIONS_SCHEMA: JSONSchema = {
@@ -26,6 +29,12 @@ export const BLASTEM_OPTIONS_SCHEMA: JSONSchema = {
       enum: ['auto', 'us', 'eu', 'jp'],
       default: 'auto',
       description: 'Region override for the Mega Drive emulator.',
+    },
+    renderFilter: {
+      type: 'string',
+      enum: ['pixelated', 'smooth'],
+      default: 'pixelated',
+      description: 'Canvas scaling filter: pixelated for crisp pixels, smooth for linear filtering.',
     },
   },
 };

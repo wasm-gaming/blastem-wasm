@@ -16,10 +16,13 @@ import { manifest, load } from '@wasm-gaming/blastem-wasm';
 const engine = await load({
   canvas,
   assets: { rom: romBytes },
+  options: { renderFilter: 'pixelated' },
   onEvent: (e) => console.log(e),
 });
 engine.start();
 ```
+
+`renderFilter` defaults to `pixelated` for crisp scaling. Set it to `smooth` to use linear filtering.
 
 ## Build
 
