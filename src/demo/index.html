@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BlastEm WASM — Demo</title>
+  <link rel="icon" href="data:," />
+  <style>
+    body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: monospace; }
+    /* IMPORTANT: no border/padding on the canvas itself — SDL2's Emscripten
+       backend measures the canvas with getBoundingClientRect() (which includes
+       borders) to detect external CSS sizing, and a border makes it create a
+       tiny window (e.g. 5x5). Put decoration on a wrapper instead. */
+    #canvas-frame { border: 2px solid #444; font-size: 0; }
+    canvas { display: block; }
+    #controls { margin-top: 1rem; display: flex; gap: 1rem; }
+    button { padding: .5rem 1.5rem; background: #222; color: #fff; border: 1px solid #555; cursor: pointer; font-family: monospace; }
+    button:hover { background: #333; }
+  </style>
+</head>
+<body>
+  <!-- BlastEm Emscripten SDL2 MUST find a canvas with id="canvas" -->
+  <div id="canvas-frame">
+    <canvas id="canvas" width="640" height="480"></canvas>
+  </div>
+  <div id="controls">
+    <input type="file" id="rom-picker" accept=".bin,.gen,.md,.smd" />
+    <button id="btn-load">Load ROM</button>
+  </div>
+  <script type="module">
+    import { load } from './blastem/blastem.sdk.js';
+
+    const canvas = document.getElementById('canvas');
+    let engine = null;
+
+    document.getElementById('btn-load').addEventListener('click', async () => {
+      const file = document.getElementById('rom-picker').files[0];
+      if (!file) { alert('Pick a ROM file first.'); return; }
+      const rom = new Uint8Array(await file.arrayBuffer());
+
+      if (engine) engine.destroy();
+
+      engine = await load({
+        canvas,
+        assets: { rom },
+        onEvent: (e) => console.log('[blastem]', e),
+      });
+      engine.start();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "name": "@wasm-gaming/blastem-wasm",
+  "version": "0.1.0",
+  "description": "BlastEm (Sega Mega Drive emulator) compiled to WebAssembly via Emscripten, with a JS SDK conforming to the wasm-gaming engine contract.",
+  "type": "module",
+  "main": "./dist/blastem/blastem.sdk.js",
+  "types": "./dist/blastem/blastem.sdk.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/blastem/blastem.sdk.d.ts",
+      "import": "./dist/blastem/blastem.sdk.js"
+    },
+    "./options": {
+      "types": "./dist/blastem/blastem.options.d.ts",
+      "import": "./dist/blastem/blastem.options.js"
+    },
+    "./manifest": "./dist/manifest.json"
+  },
+  "files": [
+    "dist/blastem/",
+    "dist/manifest.json",
+    "src/blastem.manifest.ts",
+    "src/blastem.options.ts",
+    "src/blastem.sdk.ts",
+    "README.md"
+  ],
+  "comment:scripts": "Build logic lives in the Makefile, not here (make build / build-sdk / build-wasm / preview).",
+  "scripts": {},
+  "peerDependencies": {
+    "@wasm-gaming/engine-specs": "*"
+  },
+  "peerDependenciesMeta": {
+    "@wasm-gaming/engine-specs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@wasm-gaming/engine-specs": "^0.1.0",
+    "typescript": "^5.5.0"
+  },
+  "engineContract": "https://github.com/wasm-gaming/engine-specs",
+  "license": "MIT"
+}
