@@ -52,12 +52,16 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    container:
+      image: emscripten/emsdk:latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build WASM runtime
-        run: make build-wasm
+        run: |
+          apt-get update -qq && apt-get install -y wget tar -qq
+          make build-wasm-ci
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4

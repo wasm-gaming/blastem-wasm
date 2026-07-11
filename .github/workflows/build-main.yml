@@ -33,10 +33,14 @@ jobs:
 
   wasm:
     runs-on: ubuntu-latest
+    container:
+      image: emscripten/emsdk:latest
     steps:
       - uses: actions/checkout@v4
       - name: Build WASM runtime
-        run: make build-wasm
+        run: |
+          apt-get update -qq && apt-get install -y wget tar -qq
+          make build-wasm-ci
       - uses: actions/upload-artifact@v4
         with:
           name: wasm-dist

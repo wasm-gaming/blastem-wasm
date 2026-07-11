@@ -7,7 +7,7 @@ BIN := node_modules/.bin
 
 PORT ?= 8027
 
-.PHONY: build build-sdk build-lib build-manifest build-demo build-wasm \
+.PHONY: build build-sdk build-lib build-manifest build-demo build-wasm build-wasm-ci build-wasm-docker \
 	preview typecheck test release-check i install clean help
 
 i: install
@@ -33,8 +33,13 @@ build-demo: build-lib ## Compile demo shell
 	cp src/demo/index.html dist/index.html
 	cp src/demo/favicon.ico dist/favicon.ico
 
-build-wasm: ## Build BlastEm WASM artifacts via Docker wrapper
+build-wasm: ## Build BlastEm WASM artifacts via local Docker wrapper
 	bash scripts/build-blastem-docker.sh
+
+build-wasm-ci: ## Build BlastEm WASM artifacts directly (for CI containers)
+	bash scripts/build-blastem.sh
+
+build-wasm-docker: build-wasm ## Alias: local Docker wrapper
 
 typecheck: build-lib
 	$(BIN)/tsc -p tsconfig.json --noEmit
