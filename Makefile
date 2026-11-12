@@ -1,53 +1,60 @@
 # @wasm-gaming/blastem-wasm — build & preview
 #
-#   make build     Full build → dist/ (TypeScript SDK + WASM)
-#   make preview   Serve dist/ at http://localhost:$(PORT)
+#   make build       The package: SDK + WASM → dist/
+#   make build-sdk   TypeScript only (fast, no Docker) → dist/blastem/
+#   make build-wasm  BlastEm → WebAssembly, in the pinned emsdk image (Docker)
+#   make demo        The no-build demo page → dist/index.html
+#   make test        Type-check, then the tests against the built package
+#   make preview     Serve dist/ with COOP/COEP
+#
+# All build logic lives here (package.json has no scripts).
 
 BIN := node_modules/.bin
-
 PORT ?= 8027
+SPECS := node_modules/@wasm-gaming/engine-specs
 
-.PHONY: build build-sdk build-lib build-manifest build-demo build-wasm build-wasm-ci build-wasm-docker \
-	preview typecheck test release-check i install clean help
+.PHONY: build build-sdk build-lib build-specs build-wasm build-wasm-ci demo \
+	typecheck test release-check preview i install clean help
 
 i: install
-install: ## Install dev dependencies
+install: ## Install dependencies
 	npm install
 
 node_modules: package.json
 	npm install
 	@touch node_modules
 
-build: build-wasm build-sdk ## Full build → dist/ (WASM first, then SDK/demo)
+build: build-wasm build-sdk demo ## The package and the demo: WASM + SDK → dist/
 
-build-sdk: build-lib build-manifest build-demo ## TypeScript + manifest + demo shell
+build-sdk: build-lib build-specs ## The published SDK: TypeScript → dist/blastem/ (no WASM)
 
-build-lib: node_modules ## Compile SDK/options/manifest → dist/blastem/
+build-lib: node_modules ## Compile SDK + options → dist/blastem/
 	$(BIN)/tsc -p tsconfig.json
 
-build-manifest: build-lib ## Serialize typed manifest → dist/manifest.json
-	node scripts/emit-manifest.mjs
+build-specs: build-lib ## Ship the contract runtime beside the SDK and import it relatively
+	# The SDK extends the contract's base classes, so engine-specs is a runtime
+	# import. Copied into dist/blastem/ (inside `files`) and the emitted imports
+	# rewritten to it: the package loads from any static server, no import map.
+	cp $(SPECS)/dist/engine-specs.js dist/blastem/engine-specs.js
+	node scripts/localize-specs.mjs dist/blastem
 
-build-demo: build-lib ## Compile demo shell
-	$(BIN)/tsc -p tsconfig.demo.json
+build-wasm: ## BlastEm → WebAssembly via the pinned emsdk image (Docker) → dist/blastem/
+	bash scripts/build-blastem-docker.sh
+
+build-wasm-ci: ## Same build, run directly (CI runs inside the emsdk container)
+	bash scripts/build-blastem.sh
+
+demo: ## The no-build demo page → dist/index.html
 	cp src/demo/index.html dist/index.html
 	cp src/demo/favicon.ico dist/favicon.ico
 
-build-wasm: ## Build BlastEm WASM artifacts via local Docker wrapper
-	bash scripts/build-blastem-docker.sh
-
-build-wasm-ci: ## Build BlastEm WASM artifacts directly (for CI containers)
-	bash scripts/build-blastem.sh
-
-build-wasm-docker: build-wasm ## Alias: local Docker wrapper
-
-typecheck: build-lib
+typecheck: node_modules ## Type-check the SDK
 	$(BIN)/tsc -p tsconfig.json --noEmit
-	$(BIN)/tsc -p tsconfig.demo.json --noEmit
 
-test: typecheck
+test: typecheck build-sdk ## Type-check, then run tests/ against the built package
+	node --test tests/*.test.mjs
 
-release-check: test
+release-check: build-sdk test ## npm pack preview
 	npm config get registry
 	npm pack --dry-run
 
@@ -59,4 +66,6 @@ clean: ## Remove build outputs
 	@if [ -d dist ]; then find dist -mindepth 1 -delete; fi
 
 help: ## List targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help
