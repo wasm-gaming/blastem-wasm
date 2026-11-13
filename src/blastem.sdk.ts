@@ -69,15 +69,18 @@ interface BlastemModule {
     writeFile(path: string, data: Uint8Array): void;
     readFile(path: string): Uint8Array;
     readdir(path: string): string[];
-    stat(path: string): { mode: number };
+    stat(path: string): { mode: number; mtime: Date | number };
+    unlink(path: string): void;
     isFile(mode: number): boolean;
   };
   callMain(args: string[]): void;
   _web_persist_save(): void;
   _web_soft_reset(): void;
+  _web_save_state(slot: number): number;
+  _web_load_state(slot: number): number;
   _emscripten_pause_main_loop(): void;
   _emscripten_resume_main_loop(): void;
-  SDL2?: { audioContext?: AudioContext };
+  SDL2?: { audioContext?: AudioContext; audio?: { scriptProcessorNode?: AudioNode } };
 }
 
 type BlastemFactory = (overrides: Record<string, unknown>) => Promise<BlastemModule>;
@@ -139,6 +142,50 @@ function romName(bytes: Uint8Array): string {
   return bytes.length % 0x4000 === 512 ? 'game.smd' : 'game.bin';
 }
 
+/** The player's save-state slots: 0-3 (BlastEm numbers 0-9). */
+export const STATE_SLOTS = 4;
+/**
+ * The *unsaved* suspend point (Classic Mini style): written when the player leaves,
+ * offered when they come back, and saved into a numbered slot only when they ask.
+ */
+export const AUTO_STATE_SLOT = 9;
+
+/** One save-state slot. */
+export interface BlastemStateSlot {
+  slot: number;
+  /** When the state was written, or null for an empty slot. */
+  savedAt: Date | null;
+  /** The frame saved with it (PNG), when the host handed one over. */
+  thumbnail: Blob | null;
+  /** Protected: cannot be overwritten or removed until unlocked. */
+  locked: boolean;
+}
+
+/** Save states: BlastEm's numbered slots, kept in the save folder (and OPFS). */
+export interface BlastemStates {
+  /** The player's slots, 0-3. */
+  list(): BlastemStateSlot[];
+  /** Any slot, {@link AUTO_STATE_SLOT} included. */
+  get(slot: number): BlastemStateSlot;
+  /**
+   * Save the running game into `slot`. BlastEm writes at its next sync point, so a
+   * paused game runs for a few frames (muted) until the file lands, then pauses again.
+   * Resolves once it is written and mirrored to OPFS. Refuses a locked slot.
+   */
+  save(slot: number, options?: { thumbnail?: Blob | null }): Promise<void>;
+  /** Load `slot`; false when it is empty. Applies on the next frame the game runs. */
+  load(slot: number): boolean;
+  /** Copy a state (and its frame) into another slot — the unsaved point into a numbered one. */
+  copy(from: number, to: number): Promise<void>;
+  lock(slot: number, locked: boolean): Promise<void>;
+  remove(slot: number): Promise<void>;
+}
+
+const STATE_EXTS = ['state', 'gst'] as const;
+const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const mtimeOf = (value: Date | number | undefined): number =>
+  value instanceof Date ? value.getTime() : typeof value === 'number' ? value : 0;
+
 /** The live engine: one booted BlastEm and its session. */
 export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
   #module: BlastemModule | null = null;
@@ -172,6 +219,182 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
   /** Where this session's saves live, relative to the OPFS root: `blastem/<namespace>`. */
   get storagePath(): string {
     return this.#storagePath;
+  }
+
+  /**
+   * The current frame as a PNG, read inside an animation frame (the picture is only
+   * there right after the game drew it): take it *before* pausing. Null when there is
+   * nothing to read.
+   */
+  async snapshot(): Promise<Blob | null> {
+    const canvas = this.#canvas;
+    if (!canvas || !this.#module) return null;
+    await nextFrame();
+    const copy = document.createElement('canvas');
+    copy.width = BLASTEM_VIDEO.width;
+    copy.height = BLASTEM_VIDEO.height;
+    copy.getContext('2d')?.drawImage(canvas, 0, 0, copy.width, copy.height);
+    return new Promise((resolve) => copy.toBlob((blob) => resolve(blob), 'image/png'));
+  }
+
+  /** Save states — see {@link BlastemStates}. */
+  get states(): BlastemStates {
+    const Module = this.#requireModule();
+    const { FS } = Module;
+    const file = (name: string): string => `${SAVE_DIR}/${name}`;
+    const exists = (name: string): boolean => {
+      try {
+        FS.stat(file(name));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const stateFile = (slot: number): { name: string; mtime: number } | null => {
+      for (const ext of STATE_EXTS) {
+        const name = `slot_${slot}.${ext}`;
+        try {
+          return { name, mtime: mtimeOf(FS.stat(file(name)).mtime) };
+        } catch {
+          /* not this one */
+        }
+      }
+      return null;
+    };
+    const checkSlot = (slot: number): number => {
+      if (slot === AUTO_STATE_SLOT || (Number.isInteger(slot) && slot >= 0 && slot < STATE_SLOTS)) return slot;
+      throw new RangeError(`blastem: a state slot is 0-${STATE_SLOTS - 1} or ${AUTO_STATE_SLOT}, not ${slot}`);
+    };
+    const isLocked = (slot: number): boolean => exists(`slot_${slot}.lock`);
+    const refuseLocked = (slot: number): void => {
+      if (isLocked(slot)) throw new Error(`blastem: state slot ${slot} is locked`);
+    };
+    const unlink = (name: string): void => {
+      try {
+        FS.unlink(file(name));
+      } catch {
+        /* not there */
+      }
+    };
+    // Removed files have to leave OPFS too: the mirror only ever writes.
+    const forget = async (names: string[]): Promise<void> => {
+      for (const name of names) {
+        unlink(name);
+        this.#lastSaved.delete(name);
+      }
+      const dir = this.#persist ? await opfsDir(this.#storagePath, false) : null;
+      for (const name of names) await dir?.removeEntry(name).catch(() => {});
+    };
+    const get = (slot: number): BlastemStateSlot => {
+      checkSlot(slot);
+      const state = stateFile(slot);
+      let thumbnail: Blob | null = null;
+      if (state && exists(`slot_${slot}.png`)) {
+        thumbnail = new Blob([new Uint8Array(FS.readFile(file(`slot_${slot}.png`)))], { type: 'image/png' });
+      }
+      return { slot, savedAt: state ? new Date(state.mtime) : null, thumbnail, locked: isLocked(slot) };
+    };
+    return {
+      list: () => Array.from({ length: STATE_SLOTS }, (_, slot) => get(slot)),
+      get,
+      save: async (slot, options = {}) => {
+        checkSlot(slot);
+        refuseLocked(slot);
+        const before = stateFile(slot);
+        if (!Module._web_save_state(slot)) throw new Error('blastem: no game running to save');
+        // A paused game has to run for the request to reach a sync point — and BlastEm
+        // paces itself on the audio callback, so the sound has to run too: routed
+        // through a silent gain for those few frames.
+        const owner = this.#pauseOwner;
+        const muted = owner ? await this.#runMuted() : null;
+        try {
+          const deadline = performance.now() + 3000;
+          let after = stateFile(slot);
+          while (!(after && (!before || after.mtime !== before.mtime)) && performance.now() < deadline) {
+            await nextFrame();
+            after = stateFile(slot);
+          }
+          if (!after) throw new Error('blastem: the state was not written');
+        } finally {
+          await muted?.();
+        }
+        if (options.thumbnail) {
+          FS.writeFile(file(`slot_${slot}.png`), new Uint8Array(await options.thumbnail.arrayBuffer()));
+        } else await forget([`slot_${slot}.png`]);
+        await this.flushSaves();
+      },
+      load: (slot) => {
+        checkSlot(slot);
+        if (!stateFile(slot)) return false;
+        return Module._web_load_state(slot) !== 0;
+      },
+      copy: async (from, to) => {
+        checkSlot(from);
+        checkSlot(to);
+        refuseLocked(to);
+        const state = stateFile(from);
+        if (!state) throw new Error(`blastem: state slot ${from} is empty`);
+        const ext = state.name.slice(state.name.lastIndexOf('.') + 1);
+        await forget(STATE_EXTS.map((e) => `slot_${to}.${e}`).concat(`slot_${to}.png`));
+        FS.writeFile(file(`slot_${to}.${ext}`), new Uint8Array(FS.readFile(file(state.name))));
+        if (exists(`slot_${from}.png`)) {
+          FS.writeFile(file(`slot_${to}.png`), new Uint8Array(FS.readFile(file(`slot_${from}.png`))));
+        }
+        await this.flushSaves();
+      },
+      lock: async (slot, locked) => {
+        checkSlot(slot);
+        if (locked) {
+          if (!stateFile(slot)) throw new Error(`blastem: state slot ${slot} is empty`);
+          FS.writeFile(file(`slot_${slot}.lock`), new Uint8Array([1]));
+          await this.flushSaves();
+        } else {
+          await forget([`slot_${slot}.lock`]);
+          this.emit('saves', { files: [`slot_${slot}.lock`] });
+        }
+      },
+      remove: async (slot) => {
+        checkSlot(slot);
+        refuseLocked(slot);
+        const names = [...STATE_EXTS.map((ext) => `slot_${slot}.${ext}`), `slot_${slot}.png`];
+        await forget(names);
+        this.emit('saves', { files: names });
+      },
+    };
+  }
+
+  /** Run the paused loop with the sound going nowhere; returns the undo. */
+  async #runMuted(): Promise<() => Promise<void>> {
+    const Module = this.#requireModule();
+    const context = Module.SDL2?.audioContext;
+    const node = Module.SDL2?.audio?.scriptProcessorNode;
+    let gain: GainNode | null = null;
+    if (context && node) {
+      gain = context.createGain();
+      gain.gain.value = 0;
+      gain.connect(context.destination);
+      node.disconnect();
+      node.connect(gain);
+      await context.resume().catch(() => {});
+    }
+    Module._emscripten_resume_main_loop();
+    return async () => {
+      // Still paused by the same owner (nobody resumed meanwhile): freeze again.
+      if (this.#pauseOwner) {
+        Module._emscripten_pause_main_loop();
+        await context?.suspend().catch(() => {});
+      }
+      if (context && node && gain) {
+        node.disconnect();
+        node.connect(context.destination);
+        gain.disconnect();
+      }
+    };
+  }
+
+  #requireModule(): BlastemModule {
+    if (!this.#module) throw new Error('blastem: the engine is not running — start() it first');
+    return this.#module;
   }
 
   /** Who holds the pause, or null while running. */
@@ -443,7 +666,7 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
 export class BlastemSDK extends EngineSDKBase<BlastemPayloads> {
   static readonly id = ENGINE_ID;
   /** Kept in step with package.json by `node scripts/sync-version.mjs`. */
-  static readonly version = '0.2.0';
+  static readonly version = '0.3.0';
   static readonly name = 'BlastEm';
   static readonly description =
     'BlastEm, the Sega Mega Drive / Genesis emulator by Michael Pavone, compiled to WebAssembly. Ships no games: the player provides the ROM, and it never leaves their browser.';

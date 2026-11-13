@@ -13,7 +13,7 @@ BIN := node_modules/.bin
 PORT ?= 8027
 SPECS := node_modules/@wasm-gaming/engine-specs
 
-.PHONY: build build-sdk build-lib build-specs build-wasm build-wasm-ci demo \
+.PHONY: build build-sdk build-app build-lib build-specs build-wasm build-wasm-ci demo \
 	typecheck test release-check preview i install clean help
 
 i: install
@@ -26,7 +26,14 @@ node_modules: package.json
 
 build: build-wasm build-sdk demo ## The package and the demo: WASM + SDK → dist/
 
-build-sdk: build-lib build-specs ## The published SDK: TypeScript → dist/blastem/ (no WASM)
+build-sdk: build-lib build-specs build-app ## The published SDK: TypeScript → dist/blastem/ (no WASM)
+
+build-app: ## The engine's own app (suspend points + pause menu) → dist/blastem/app/
+	# Plain JS + CSS, mounted by hosts as <engine>/app/app.js (EngineApp); it imports
+	# the SDK next to it relatively.
+	rm -rf dist/blastem/app
+	mkdir -p dist/blastem/app
+	cp src/app/app.js src/app/app.css dist/blastem/app/
 
 build-lib: node_modules ## Compile SDK + options → dist/blastem/
 	$(BIN)/tsc -p tsconfig.json

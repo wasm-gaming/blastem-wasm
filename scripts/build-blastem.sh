@@ -54,7 +54,7 @@ grep -q 'save_path /save' default.cfg || { echo "error: could not patch save_pat
 cat "$PROJECT_DIR/scripts/web_bridge.c" >> blastem.c
 
 # ES module factory, FS for the SDK, and the bridge + main-loop control exported.
-sed -i 's#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result,_web_persist_save,_web_soft_reset,_emscripten_pause_main_loop,_emscripten_resume_main_loop#' Makefile
+sed -i 's#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result,_web_persist_save,_web_soft_reset,_web_save_state,_web_load_state,_emscripten_pause_main_loop,_emscripten_resume_main_loop#' Makefile
 sed -i 's#-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain#-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,FS -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createBlastem -sENVIRONMENT=web#' Makefile
 # An ES module factory cannot be emitted as an .html page: link to blastem.js.
 sed -i 's#^EXE:=.html#EXE:=.js#' Makefile
