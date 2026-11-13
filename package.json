@@ -1,6 +1,6 @@
 {
   "name": "@wasm-gaming/blastem-wasm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BlastEm (Sega Mega Drive / Genesis emulator) compiled to WebAssembly, with a self-contained JS SDK implementing the wasm-gaming engine contract.",
   "type": "module",
   "main": "./dist/blastem/blastem.sdk.js",

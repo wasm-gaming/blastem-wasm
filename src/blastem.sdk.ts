@@ -666,7 +666,7 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
 export class BlastemSDK extends EngineSDKBase<BlastemPayloads> {
   static readonly id = ENGINE_ID;
   /** Kept in step with package.json by `node scripts/sync-version.mjs`. */
-  static readonly version = '0.1.0';
+  static readonly version = '0.1.1';
   static readonly name = 'BlastEm';
   static readonly description =
     'BlastEm, the Sega Mega Drive / Genesis emulator by Michael Pavone, compiled to WebAssembly. Ships no games: the player provides the ROM, and it never leaves their browser.';
