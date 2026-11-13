@@ -110,14 +110,22 @@ Key sections and notable options from upstream `default.cfg`:
 
 ## Wrapper Exposure Status (this package)
 
-Current TypeScript wrapper options in `src/blastem.options.ts`:
+The SDK implements the wasm-gaming engine contract 1.0 (`BLASTEM_SPEC` in `src/blastem.options.ts`):
 
-- `romFileName?: string`
-- `region?: 'auto' | 'us' | 'eu' | 'jp'`
-- `renderFilter?: 'pixelated' | 'smooth'`
+- `config.region?: 'auto' | 'us' | 'eu' | 'jp'` → CLI `-r U|E|J` (omitted for `auto`).
+- `config.renderFilter?: 'pixelated' | 'smooth'` → canvas CSS `image-rendering` (wrapper-only, live).
+- `config.jsUrl` / `config.wasmUrl` → where the glue and the wasm are served.
+- `assets.rom` → written to MEMFS `/rom/game.bin` (`game.smd` for interleaved dumps) and passed as ROMFILE.
+- `storage.namespace` / `storage.persist` → OPFS `blastem/<namespace>/` mirror of MEMFS `/save`.
+
+Build-time changes to upstream (`scripts/build-blastem.sh`, pinned revision `6d1a7447ee9e`):
+- `default.cfg`: `save_path /save` (instead of `$USERDATA/blastem/$ROMNAME`).
+- `emscripten_pre.js` replaced: no IDBFS mount, no automatic `callMain`.
+- `blastem.c` gains `web_persist_save()` and `web_soft_reset()` (`scripts/web_bridge.c`): upstream
+  only persisted saves at `atexit`, which a web page never reaches.
+- Linked as an ES module factory (`createBlastem`), with `FS` and the main-loop pause/resume exported.
 
 Notes:
-- `renderFilter` is a wrapper-level canvas CSS choice (`image-rendering`), not a direct BlastEm `default.cfg video.scaling` toggle.
 - Most upstream core flags/config keys are not yet mapped to typed SDK options.
 
 ## Potential Future Mappings

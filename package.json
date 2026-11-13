@@ -1,7 +1,7 @@
 {
   "name": "@wasm-gaming/blastem-wasm",
   "version": "0.1.0",
-  "description": "BlastEm (Sega Mega Drive emulator) compiled to WebAssembly via Emscripten, with a JS SDK conforming to the wasm-gaming engine contract.",
+  "description": "BlastEm (Sega Mega Drive / Genesis emulator) compiled to WebAssembly, with a self-contained JS SDK implementing the wasm-gaming engine contract.",
   "type": "module",
   "main": "./dist/blastem/blastem.sdk.js",
   "types": "./dist/blastem/blastem.sdk.d.ts",
@@ -14,30 +14,32 @@
       "types": "./dist/blastem/blastem.options.d.ts",
       "import": "./dist/blastem/blastem.options.js"
     },
-    "./manifest": "./dist/manifest.json"
+    "./app": {
+      "import": "./dist/blastem/app/app.js"
+    }
   },
   "files": [
     "dist/blastem/",
-    "dist/manifest.json",
-    "src/blastem.manifest.ts",
+    "src/app/",
     "src/blastem.options.ts",
     "src/blastem.sdk.ts",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
   ],
   "comment:scripts": "Build logic lives in the Makefile, not here (make build / build-sdk / build-wasm / preview).",
   "scripts": {},
-  "peerDependencies": {
-    "@wasm-gaming/engine-specs": "*"
-  },
-  "peerDependenciesMeta": {
-    "@wasm-gaming/engine-specs": {
-      "optional": true
-    }
+  "comment:dependencies": "engine-specs is the one wasm-gaming package an engine depends on. Its runtime is also copied into dist/blastem/ and imported relatively, so the built SDK loads without a bundler or an import map; the dependency carries the types.",
+  "dependencies": {
+    "@wasm-gaming/engine-specs": "^0.3.2"
   },
   "devDependencies": {
-    "@wasm-gaming/engine-specs": "^0.1.0",
     "typescript": "^5.5.0"
   },
   "engineContract": "https://github.com/wasm-gaming/engine-specs",
-  "license": "MIT"
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wasm-gaming/blastem-wasm.git"
+  }
 }

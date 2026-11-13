@@ -1,50 +1,72 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>BlastEm WASM — Demo</title>
-  <link rel="icon" href="data:," />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BlastEm WASM</title>
+  <link rel="icon" href="./favicon.ico" />
   <style>
-    body { margin: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: monospace; }
-    /* IMPORTANT: no border/padding on the canvas itself — SDL2's Emscripten
-       backend measures the canvas with getBoundingClientRect() (which includes
-       borders) to detect external CSS sizing, and a border makes it create a
-       tiny window (e.g. 5x5). Put decoration on a wrapper instead. */
-    #canvas-frame { border: 2px solid #444; font-size: 0; }
-    canvas { display: block; }
-    #controls { margin-top: 1rem; display: flex; gap: 1rem; }
-    button { padding: .5rem 1.5rem; background: #222; color: #fff; border: 1px solid #555; cursor: pointer; font-family: monospace; }
-    button:hover { background: #333; }
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    html, body { margin: 0; height: 100%; background: #000; color: #e2e8f0; }
+    body { display: grid; grid-template-rows: 1fr auto; }
+    #stage { display: grid; place-items: center; min-height: 0; }
+    #bar { display: flex; gap: .75rem; align-items: center; justify-content: center; padding: .75rem; background: #111; flex-wrap: wrap; }
+    button { font: inherit; padding: .4rem 1rem; background: #222; color: inherit; border: 1px solid #444; border-radius: 6px; cursor: pointer; }
+    #status { color: #94a3b8; font-size: .85rem; }
+    #drop { position: fixed; inset: 0; display: none; place-items: center; background: #000c; font-size: 1.4rem; }
+    body.dragging #drop { display: grid; }
   </style>
 </head>
 <body>
-  <!-- BlastEm Emscripten SDL2 MUST find a canvas with id="canvas" -->
-  <div id="canvas-frame">
-    <canvas id="canvas" width="640" height="480"></canvas>
+  <div id="stage"></div>
+  <div id="bar">
+    <input type="file" id="rom" accept=".bin,.gen,.md,.smd" />
+    <button id="pause" disabled>Pause</button>
+    <button id="reset" disabled>Reset</button>
+    <span id="status">Pick or drop a Mega Drive ROM. Arrows + A/S/D + Enter.</span>
   </div>
-  <div id="controls">
-    <input type="file" id="rom-picker" accept=".bin,.gen,.md,.smd" />
-    <button id="btn-load">Load ROM</button>
-  </div>
+  <div id="drop">Drop the ROM</div>
+
   <script type="module">
-    import { load } from './blastem/blastem.sdk.js';
+    // No build and no import map: the SDK is self-contained (it carries the
+    // contract's runtime beside it). One game per page — reload for another.
+    import BlastemSDK from './blastem/blastem.sdk.js';
 
-    const canvas = document.getElementById('canvas');
-    let engine = null;
+    const status = document.querySelector('#status');
+    let play = null;
 
-    document.getElementById('btn-load').addEventListener('click', async () => {
-      const file = document.getElementById('rom-picker').files[0];
-      if (!file) { alert('Pick a ROM file first.'); return; }
-      const rom = new Uint8Array(await file.arrayBuffer());
+    async function boot(file) {
+      if (play) { location.reload(); return; }
+      status.textContent = `Loading ${file.name}…`;
+      try {
+        play = await new BlastemSDK()
+          .assets({ rom: () => file.arrayBuffer() })
+          .storage({ namespace: file.name.replace(/\.[^.]+$/, '') })
+          .on('saves', ({ detail }) => (status.textContent = `Saved ${detail.files.join(', ')} → ${play.storagePath}/`))
+          .on('error', ({ detail }) => (status.textContent = `Error: ${detail.message}`))
+          .mount(document.querySelector('#stage'))
+          .start();
+        status.textContent = `${file.name} — saves in OPFS ${play.storagePath}/`;
+        for (const b of document.querySelectorAll('button')) b.disabled = false;
+        document.querySelector('#stage canvas').focus();
+      } catch (e) {
+        status.textContent = `Error: ${e.message}`;
+      }
+    }
 
-      if (engine) engine.destroy();
-
-      engine = await load({
-        canvas,
-        assets: { rom },
-        onEvent: (e) => console.log('[blastem]', e),
-      });
-      engine.start();
+    document.querySelector('#rom').addEventListener('change', (e) => e.target.files[0] && boot(e.target.files[0]));
+    document.querySelector('#pause').addEventListener('click', (e) => {
+      if (play.pausedBy) { play.resume('demo'); e.target.textContent = 'Pause'; }
+      else { play.pause('demo'); e.target.textContent = 'Resume'; }
+    });
+    document.querySelector('#reset').addEventListener('click', () => play.restart());
+    addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });
+    addEventListener('dragleave', () => document.body.classList.remove('dragging'));
+    addEventListener('drop', (e) => {
+      e.preventDefault();
+      document.body.classList.remove('dragging');
+      const file = e.dataTransfer.files[0];
+      if (file) boot(file);
     });
   </script>
 </body>
