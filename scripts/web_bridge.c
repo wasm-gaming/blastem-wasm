@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later — compiled into BlastEm (see LICENSE). */
 
 /* ---- wasm-gaming web bridge (appended to blastem.c by scripts/build-blastem.sh) ----
  *

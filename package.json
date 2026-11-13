@@ -23,7 +23,9 @@
     "src/app/",
     "src/blastem.options.ts",
     "src/blastem.sdk.ts",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
   ],
   "comment:scripts": "Build logic lives in the Makefile, not here (make build / build-sdk / build-wasm / preview).",
   "scripts": {},
@@ -35,7 +37,7 @@
     "typescript": "^5.5.0"
   },
   "engineContract": "https://github.com/wasm-gaming/engine-specs",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wasm-gaming/blastem-wasm.git"

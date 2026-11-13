@@ -100,4 +100,18 @@ The wasm is ~31 MB, ~2.3 MB gzipped (BlastEm's generated 68000 core is most of i
 
 ## License
 
-The SDK is MIT. BlastEm itself is GPL-3.0; the built `blastem.wasm` is a BlastEm binary.
+**GPL-3.0-or-later** — the whole repository. See [LICENSE](LICENSE).
+
+`blastem.wasm` / `blastem.js` are [BlastEm](https://www.retrodev.com/blastem/) by Michael Pavone
+(GPL-3.0-or-later), compiled to WebAssembly, and `scripts/web_bridge.c` is compiled into it; the SDK
+and the app exist to run that binary, so they are released under the same licence.
+
+**Corresponding source.** Everything needed to rebuild the binary is public:
+- BlastEm at revision `6d1a7447ee9e`, downloaded from `https://www.retrodev.com/repos/blastem/archive/6d1a7447ee9e.tar.gz`
+  and checked against the SHA-256 pinned in [`scripts/build-blastem.sh`](scripts/build-blastem.sh);
+- the patches and the bridge, all in this repository (`scripts/`);
+- the toolchain: the `emscripten/emsdk:4.0.10` image (`make build-wasm`).
+
+The binary also contains SDL2, zlib, Zstandard, Nuklear and the Roboto font, under their own
+permissive licences: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Both files are copied
+into `dist/blastem/`, so every release archive and the npm package carry them.

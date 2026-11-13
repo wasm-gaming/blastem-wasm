@@ -13,7 +13,7 @@ BIN := node_modules/.bin
 PORT ?= 8027
 SPECS := node_modules/@wasm-gaming/engine-specs
 
-.PHONY: build build-sdk build-app build-lib build-specs build-wasm build-wasm-ci demo \
+.PHONY: build build-sdk build-app build-legal build-lib build-specs build-wasm build-wasm-ci demo \
 	typecheck test release-check preview i install clean help
 
 i: install
@@ -26,7 +26,13 @@ node_modules: package.json
 
 build: build-wasm build-sdk demo ## The package and the demo: WASM + SDK → dist/
 
-build-sdk: build-lib build-specs build-app ## The published SDK: TypeScript → dist/blastem/ (no WASM)
+build-sdk: build-lib build-specs build-app build-legal ## The published SDK: TypeScript → dist/blastem/ (no WASM)
+
+build-legal: ## The licences travel with the binary: LICENSE + THIRD_PARTY_NOTICES.md → dist/blastem/
+	# blastem.wasm is BlastEm (GPL-3.0-or-later) with SDL2, zlib, zstd, Nuklear and
+	# Roboto inside; whatever ships it — the release archive, npm — carries both files.
+	mkdir -p dist/blastem
+	cp LICENSE THIRD_PARTY_NOTICES.md dist/blastem/
 
 build-app: ## The engine's own app (suspend points + pause menu) → dist/blastem/app/
 	# Plain JS + CSS, mounted by hosts as <engine>/app/app.js (EngineApp); it imports
