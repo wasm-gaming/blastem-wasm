@@ -9,6 +9,7 @@
 //   "from the beginning". Y saves the unsaved point into a slot; Y on a saved one
 //   locks / unlocks or deletes it.
 // - In game, Select+Start or Escape opens the pause menu.
+// - By touch: the hints are buttons (A, B, Y), and a long press on a card is Y.
 //
 // Plain JS and DOM: it ships next to the SDK and imports nothing else.
 
@@ -108,8 +109,16 @@ export async function mount(target, host) {
 
   // ---- render ---------------------------------------------------------------------
 
+  // A hint with an action is also a button: tapping it does what the gamepad button
+  // would (on a phone the menus are tapped). One without is the gamepad's only.
   const hints = (pairs) =>
-    `<footer class="bem-hints">${pairs.map(([k, t]) => `<span><kbd>${k}</kbd>${t}</span>`).join('')}</footer>`;
+    `<footer class="bem-hints">${pairs
+      .map(([k, t, act]) =>
+        act
+          ? `<button class="hint" data-act="${act}"><kbd>${k}</kbd>${t}</button>`
+          : `<span class="is-pad"><kbd>${k}</kbd>${t}</span>`,
+      )
+      .join('')}</footer>`;
 
   const pointCard = (card, i) => {
     const focused = state.focus === i ? ' is-focused' : '';
@@ -133,13 +142,13 @@ export async function mount(target, host) {
   };
 
   const pointsHints = () => {
-    if (state.picking) return hints([['←→', 'hueco'], ['A', 'guardar aquí'], ['B', 'cancelar']]);
+    if (state.picking) return hints([['←→', 'hueco'], ['A', 'guardar aquí', 'accept'], ['B', 'cancelar', 'back']]);
     const card = cardAt(state.focus);
     const pairs = [['←→', 'elegir']];
-    if (card?.kind === 'start' || card?.info?.savedAt) pairs.push(['A', 'jugar']);
-    if (card?.kind === 'auto') pairs.push(['Y', 'guardar en un hueco']);
-    if (card?.kind === 'slot' && card.info.savedAt) pairs.push(['Y', 'opciones']);
-    pairs.push(['B', state.from === 'pause' ? 'volver' : 'salir']);
+    if (card?.kind === 'start' || card?.info?.savedAt) pairs.push(['A', 'jugar', 'accept']);
+    if (card?.kind === 'auto') pairs.push(['Y', 'guardar en un hueco', 'more']);
+    if (card?.kind === 'slot' && card.info.savedAt) pairs.push(['Y', 'opciones', 'more']);
+    pairs.push(['B', state.from === 'pause' ? 'volver' : 'salir', 'back']);
     return hints(pairs);
   };
 
@@ -183,7 +192,7 @@ export async function mount(target, host) {
         <p class="kicker">${esc(host.game?.title ?? '')}</p>
         <h2>Pausa</h2>
         ${state.pause.items.map((item, i) => `<button class="item${i === state.pause.focus && s === 'pause' ? ' is-focused' : ''}" data-item="${i}">${esc(item.label)}${item.hint ? `<small>${esc(item.hint)}</small>` : ''}</button>`).join('')}
-        ${hints([['A', 'elegir'], ['B', 'continuar']])}
+        ${hints([['A', 'elegir'], ['B', 'continuar', 'back']])}
       </section>`;
     }
     if (s === 'sheet') {
@@ -191,6 +200,7 @@ export async function mount(target, host) {
       html += `<div class="bem-layer"><section class="bem-panel is-small">
         <h2>Punto ${sh.slot + 1}</h2>
         ${sh.items.map((item, i) => `<button class="item${item.danger ? ' is-danger' : ''}${i === sh.focus ? ' is-focused' : ''}" data-sheet="${i}" ${item.disabled ? 'disabled' : ''}>${esc(item.label)}${item.hint ? `<small>${esc(item.hint)}</small>` : ''}</button>`).join('')}
+        ${hints([['B', 'volver', 'back']])}
       </section></div>`;
     }
     if (s === 'confirm') {
@@ -469,7 +479,7 @@ export async function mount(target, host) {
   };
 
   let busy = false;
-  const off = host.input.on(async (action) => {
+  const onAction = async (action) => {
     if (leaving || busy) return;
     busy = true;
     try {
@@ -487,14 +497,24 @@ export async function mount(target, host) {
     } finally {
       busy = false;
     }
-  });
+  };
+  const off = host.input.on(onAction);
 
   // Pointer: hover (real movement only — a render replaces what is under a resting
   // cursor) focuses, click activates; the same paths as the pad.
   let lastPointer = '';
   const onPointer = async (event) => {
-    const el = event.target.closest('[data-card],[data-item],[data-sheet],[data-confirm],[data-exit]');
+    if (event.type === 'click' && longPressed) {
+      // The lift after a long press: the press already did its job.
+      longPressed = false;
+      return;
+    }
+    const el = event.target.closest('[data-card],[data-item],[data-sheet],[data-confirm],[data-exit],[data-act]');
     if (!el || leaving || busy) return;
+    if (el.dataset.act != null) {
+      if (event.type === 'click') await onAction(el.dataset.act);
+      return;
+    }
     if (event.type === 'pointermove') {
       const at = `${event.clientX},${event.clientY}`;
       if (at === lastPointer) return;
@@ -528,6 +548,45 @@ export async function mount(target, host) {
   overlay.addEventListener('click', onPointer);
   overlay.addEventListener('pointermove', onPointer);
 
+  // Touch: a long press on a card focuses it and does what Y does (save the unsaved point
+  // into a slot; a saved point's options) — a tap would play it.
+  const LONG_PRESS_MS = 500;
+  let longPressed = false;
+  let press = null;
+  const cancelPress = () => {
+    if (press) clearTimeout(press.timer);
+    press = null;
+  };
+  const onPressDown = (event) => {
+    cancelPress();
+    longPressed = false;
+    if (event.pointerType === 'mouse') return;
+    const el = event.target.closest('[data-card]');
+    if (!el || state.screen !== 'points') return;
+    const index = +el.dataset.card;
+    press = {
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(async () => {
+        press = null;
+        longPressed = true;
+        if (leaving || busy || state.screen !== 'points') return;
+        state.focus = index;
+        render();
+        await onAction('more');
+      }, LONG_PRESS_MS),
+    };
+  };
+  const onPressMove = (event) => {
+    if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 12) cancelPress();
+  };
+  const noMenu = (event) => event.preventDefault();
+  overlay.addEventListener('pointerdown', onPressDown);
+  overlay.addEventListener('pointermove', onPressMove);
+  overlay.addEventListener('pointerup', cancelPress);
+  overlay.addEventListener('pointercancel', cancelPress);
+  overlay.addEventListener('contextmenu', noMenu);
+
   const handle = {
     async unmount() {
       destroyed = true;
@@ -536,6 +595,12 @@ export async function mount(target, host) {
       clearTimeout(toastTimer);
       overlay.removeEventListener('click', onPointer);
       overlay.removeEventListener('pointermove', onPointer);
+      cancelPress();
+      overlay.removeEventListener('pointerdown', onPressDown);
+      overlay.removeEventListener('pointermove', onPressMove);
+      overlay.removeEventListener('pointerup', cancelPress);
+      overlay.removeEventListener('pointercancel', cancelPress);
+      overlay.removeEventListener('contextmenu', noMenu);
       try {
         await play?.destroy();
       } catch {
