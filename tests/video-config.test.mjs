@@ -53,13 +53,14 @@ test('missing keys and blocks are added inside their parent', () => {
   assert.equal(values['audio/rate'], '48000');
 });
 
-test('the defaults give BlastEm its own picture, but with sharp pixels', () => {
+test('the defaults: sharp pixels and no border', () => {
   const values = Object.fromEntries(videoEntries({}));
   assert.equal(values['video/scaling'], 'nearest');
   assert.equal(values['video/fragment_shader'], 'default.f.glsl');
   assert.equal(values['video/scanlines'], 'off');
-  assert.equal(values['video/ntsc/overscan/top'], '2');
-  assert.equal(values['video/pal/overscan/bottom'], '17');
+  assert.equal(values['video/ntsc/overscan/top'], '11');
+  assert.equal(values['video/pal/overscan/bottom'], '24');
+  assert.equal(BLASTEM_SPEC.config.border.default, 'hidden');
 });
 
 test('each setting value maps to a shader BlastEm ships, and the spec lists them', () => {

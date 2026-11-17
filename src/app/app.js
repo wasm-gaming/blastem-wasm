@@ -24,6 +24,9 @@ import {
   createSettingsScreen,
   createWakeLock,
   loadSettings,
+  menuKeyAliases,
+  menuKeyHint,
+  PAD_BUTTON_NAMES,
   resolveLocale,
   saveSettings,
   settingsDefaults,
@@ -208,12 +211,19 @@ export async function mount(target, host) {
 
   // A hint with an action is also a button: tapping it does what the gamepad button
   // would (on a phone the menus are tapped). One without is the gamepad's only.
+  // A pad button in a hint shows the key bound to it next to it ("B" "S"), when that key
+  // works in the menus too (menuControls / menuKeyAliases).
+  const keyOf = (k) => {
+    const button = PAD_BUTTON_NAMES.indexOf(k);
+    const key = button >= 0 ? menuKeyHint(menuControls(), button) : '';
+    return key && key !== k ? `<kbd class="key">${esc(key)}</kbd>` : '';
+  };
   const hints = (pairs) =>
     `<footer class="bem-hints">${pairs
       .map(([k, t, act]) =>
         act
-          ? `<button class="hint" data-act="${act}"><kbd>${k}</kbd>${t}</button>`
-          : `<span class="is-pad"><kbd>${k}</kbd>${t}</span>`,
+          ? `<button class="hint" data-act="${act}"><kbd>${k}</kbd>${keyOf(k)}${t}</button>`
+          : `<span class="is-pad"><kbd>${k}</kbd>${keyOf(k)}${t}</span>`,
       )
       .join('')}</footer>`;
 
@@ -701,6 +711,13 @@ export async function mount(target, host) {
     if (Object.keys(options).length) play.options(options);
   };
   const controlRows = () => controlsModel(BUTTONS, DEFAULT_CONTROLS, saved.controls, locale);
+  /** BlastEm's buttons: the player's key, and the pad button the menus read it as (the default). */
+  const menuControls = () =>
+    BLASTEM_CONTROLS.map((c) => ({ code: saved.controls[c.id]?.code ?? c.code, button: c.button }));
+  /** The keys bound to the pad's menu buttons work in the menus (engine-specs 0.6.2, launcher's input). */
+  const applyMenuKeys = () => {
+    host.input.setKeyAliases?.(menuKeyAliases(menuControls()));
+  };
 
   const openSettings = async () => {
     const all = await described();
@@ -726,6 +743,7 @@ export async function mount(target, host) {
       onControl(_id, _binding, bindings) {
         saved.controls = bindings;
         play.setControls(toBlastemControls(bindings));
+        applyMenuKeys();
         void store();
       },
       onReset() {
@@ -733,6 +751,7 @@ export async function mount(target, host) {
         saved = { version: 1, values: {}, controls: {} };
         write(Object.fromEntries(Object.entries(defaults).filter(([key]) => !(key in SHARED_SETTINGS))));
         play.setControls({});
+        applyMenuKeys();
         applyShared();
         void store();
         screen.update(settingsModel(all, defaults, locale), controlRows());
@@ -931,6 +950,7 @@ export async function mount(target, host) {
     async unmount() {
       destroyed = true;
       leaving = true;
+      host.input.setKeyAliases?.({});
       off();
       clearTimeout(toastTimer);
       overlay.removeEventListener('click', onPointer);
@@ -963,6 +983,7 @@ export async function mount(target, host) {
   host.input.resume();
   try {
     saved = await loadSettings(ENGINE_ID);
+    applyMenuKeys();
     play = await new BlastemSDK()
       .mount(stage)
       .assets(host.assets)

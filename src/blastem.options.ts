@@ -120,7 +120,7 @@ export const BLASTEM_SPEC: EngineSpec<BlastemPayloads> = {
       group: 'video',
     },
     border: {
-      default: 'standard',
+      default: 'hidden',
       enum: ['standard', 'hidden', 'full'],
       live: true,
       description: "The border around the picture: BlastEm's default (thin), hidden, or all of it.",
