@@ -163,3 +163,7 @@
 @media (prefers-reduced-motion: reduce) {
   .point, .point-frame, .bem-boot img, .bem-toast { transition: none; animation: none; }
 }
+
+/* Ajustes (engine-specs createSettingsScreen): over the pause menu, inside the safe areas. */
+.bem-settings { padding: max(16px, var(--wg-safe-top, 0px)) 16px max(16px, var(--wg-safe-bottom, 0px)); }
+.bem-settings .wg-settings { max-height: 100%; }
