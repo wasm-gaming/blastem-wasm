@@ -35,6 +35,7 @@ import {
   type EngineSDKConstructor,
   type EventsOf,
 } from '@wasm-gaming/engine-specs';
+import { patchConfig, videoEntries, VIDEO_KEYS } from './blastem.video.js';
 import { controlTables, keyCodeOf, remapPad, type BlastemControls, type BlastemControlTables } from './blastem.controls.js';
 import {
   BLASTEM_SPEC,
@@ -55,12 +56,15 @@ export type {
   BlastemStorage,
 } from './blastem.options.js';
 export { BLASTEM_SPEC, BLASTEM_VIDEO } from './blastem.options.js';
+export { patchConfig, videoEntries, type ConfigEntry } from './blastem.video.js';
 export { BLASTEM_CONTROLS, controlTables, remapPad, type BlastemControls, type BlastemControlSpec } from './blastem.controls.js';
 
 const ENGINE_ID = 'blastem';
 const DEFAULT_STORAGE_NAMESPACE = 'default';
 const SAVE_DIR = '/save';
 const ROM_DIR = '/rom';
+/** The config BlastEm reads at boot: upstream's default.cfg, embedded in the wasm. */
+const CONFIG_FILE = '/default.cfg';
 const SAVE_INTERVAL_MS = 10_000;
 const REGION_FLAG = { us: 'U', eu: 'E', jp: 'J' } as const;
 
@@ -80,6 +84,8 @@ interface BlastemModule {
   _web_soft_reset(): void;
   _web_save_state(slot: number): number;
   _web_load_state(slot: number): number;
+  _web_apply_video?(): void;
+  ccall(name: string, returnType: 'number', argTypes: string[], args: unknown[]): number;
   _emscripten_pause_main_loop(): void;
   _emscripten_resume_main_loop(): void;
   SDL2?: { audioContext?: AudioContext; audio?: { scriptProcessorNode?: AudioNode } };
@@ -520,6 +526,7 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
 
   protected override patched(kind: string, patch: object): void {
     if (kind === 'config' && 'renderFilter' in patch) void this.#applyFilter();
+    if (kind === 'config' && VIDEO_KEYS.some((key) => key in patch)) void this.#applyVideo();
   }
 
   protected override async close(): Promise<void> {
@@ -602,6 +609,9 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
     }
     const name = romName(rom);
     FS.writeFile(`${ROM_DIR}/${name}`, rom);
+    // The video settings, in the config BlastEm reads at boot (the bundled default.cfg).
+    const cfg = new TextDecoder().decode(FS.readFile(CONFIG_FILE));
+    FS.writeFile(CONFIG_FILE, new TextEncoder().encode(patchConfig(cfg, videoEntries(config))));
     if (this.#persist) await this.#restoreSaves();
 
     const args: string[] = [];
@@ -698,6 +708,18 @@ export class BlastemPlay extends EnginePlayBase<BlastemPayloads> {
     const scale = Math.min(width / BLASTEM_VIDEO.width, height / BLASTEM_VIDEO.height);
     canvas.style.width = `${Math.floor(BLASTEM_VIDEO.width * scale)}px`;
     canvas.style.height = `${Math.floor(BLASTEM_VIDEO.height * scale)}px`;
+  }
+
+  /** The video settings while the game runs: into BlastEm's config, then the renderer rebuilt. */
+  async #applyVideo(): Promise<void> {
+    const Module = this.#module;
+    if (!Module?._web_apply_video) return; // not booted yet (the boot writes them), or an older wasm
+    const config = await this.#values<BlastemConfig>('config');
+    for (const [path, value] of videoEntries(config)) {
+      Module.ccall('web_set_config', 'number', ['string', 'string'], [path, value]);
+    }
+    Module._web_apply_video();
+    this.#fit();
   }
 
   async #applyFilter(): Promise<void> {

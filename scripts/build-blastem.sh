@@ -50,11 +50,17 @@ sed -i 's# -lidbfs.js##' Makefile
 sed -i 's#^\(\s*\)save_path \$USERDATA/blastem/\$ROMNAME#\1save_path /save#' default.cfg
 grep -q 'save_path /save' default.cfg || { echo "error: could not patch save_path" >&2; exit 1; }
 
+# WebGL is GLSL ES: a fragment shader needs a default float precision, which upstream's
+# CRT shader leaves out (it only compiles on desktop GL). The SDK offers it as a filter.
+sed -i '1i precision mediump float;' shaders/crt.f.glsl
+
 # Bridge functions the SDK calls (save flush, soft reset).
 cat "$PROJECT_DIR/scripts/web_bridge.c" >> blastem.c
+# Video settings applied live (overscan read again, renderer rebuilt).
+cat "$PROJECT_DIR/scripts/web_render_bridge.c" >> render_sdl.c
 
 # ES module factory, FS for the SDK, and the bridge + main-loop control exported.
-sed -i 's#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result,_web_persist_save,_web_soft_reset,_web_save_state,_web_load_state,_emscripten_pause_main_loop,_emscripten_resume_main_loop#' Makefile
+sed -i 's#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result#-sEXPORTED_FUNCTIONS=_main,_handle_chooser_result,_web_persist_save,_web_soft_reset,_web_save_state,_web_load_state,_web_set_config,_web_apply_video,_emscripten_pause_main_loop,_emscripten_resume_main_loop#' Makefile
 sed -i 's#-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain#-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,FS -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createBlastem -sENVIRONMENT=web#' Makefile
 # An ES module factory cannot be emitted as an .html page: link to blastem.js.
 sed -i 's#^EXE:=.html#EXE:=.js#' Makefile

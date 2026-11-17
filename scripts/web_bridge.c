@@ -43,3 +43,27 @@ EMSCRIPTEN_KEEPALIVE void web_soft_reset(void)
 	}
 }
 #endif
+
+/*
+ * Video settings while the game runs: the SDK sets each value in BlastEm's config tree
+ * ("video/fragment_shader", "video/ntsc/overscan/top"…, '/' between levels), then asks
+ * the renderer to rebuild with web_apply_video() (scripts/web_render_bridge.c). The
+ * same as upstream's own settings menu does, without the menu.
+ */
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE int web_set_config(const char *path, const char *value)
+{
+	size_t len = strlen(path);
+	if (!len || !value) {
+		return 0;
+	}
+	/* tern paths are NUL-separated and end in a double NUL. */
+	char *key = calloc(len + 2, 1);
+	for (size_t i = 0; i < len; i++) {
+		key[i] = path[i] == '/' ? 0 : path[i];
+	}
+	config = tern_insert_path(config, key, (tern_val){.ptrval = strdup(value)}, TVAL_PTR);
+	free(key);
+	return 1;
+}
+#endif

@@ -18,8 +18,14 @@ export type BlastemAsset =
 export interface BlastemConfig {
   /** Console region. `auto` lets BlastEm read it from the ROM header. */
   region?: 'auto' | 'us' | 'eu' | 'jp';
-  /** How the picture is scaled to the mount: crisp pixels or linear filtering. */
+  /** How the picture is scaled: crisp pixels (nearest) or linear filtering. */
   renderFilter?: 'pixelated' | 'smooth';
+  /** BlastEm's own shader (its shaders/ folder): CRT, NTSC composite, xBRZ… */
+  shader?: 'standard' | 'sharp' | 'crt' | 'ntsc' | 'xbrz';
+  /** Dark lines between the picture's lines, as BlastEm draws them. */
+  scanlines?: boolean;
+  /** The border around the picture: BlastEm's default, hidden, or all of it. */
+  border?: 'standard' | 'hidden' | 'full';
   /** Emscripten glue URL. Defaults to `./blastem.js` next to the SDK. */
   jsUrl?: string;
   /** WASM URL. Defaults to `./blastem.wasm` next to the SDK. */
@@ -90,6 +96,37 @@ export const BLASTEM_SPEC: EngineSpec<BlastemPayloads> = {
       label: { en: 'Smoothing', es: 'Suavizado' },
       group: 'video',
       valueLabels: [{ en: 'Sharp pixels', es: 'Píxeles nítidos' }, { en: 'Smooth', es: 'Suavizado' }],
+    },
+    shader: {
+      default: 'standard',
+      enum: ['standard', 'sharp', 'crt', 'ntsc', 'xbrz'],
+      live: true,
+      description: "BlastEm's shaders: a CRT, the NTSC composite signal, xBRZ smoothing…",
+      label: { en: 'Filter', es: 'Filtro' },
+      group: 'video',
+      valueLabels: [
+        { en: 'None', es: 'Ninguno' },
+        { en: 'Sharp', es: 'Nítido' },
+        { en: 'CRT', es: 'CRT' },
+        { en: 'NTSC composite', es: 'NTSC compuesto' },
+        { en: 'xBRZ', es: 'xBRZ' },
+      ],
+    },
+    scanlines: {
+      default: false,
+      live: true,
+      description: 'Dark lines between the lines of the picture.',
+      label: { en: 'Scanlines', es: 'Líneas de barrido' },
+      group: 'video',
+    },
+    border: {
+      default: 'standard',
+      enum: ['standard', 'hidden', 'full'],
+      live: true,
+      description: "The border around the picture: BlastEm's default (thin), hidden, or all of it.",
+      label: { en: 'Border', es: 'Borde' },
+      group: 'video',
+      valueLabels: [{ en: 'Thin', es: 'Fino' }, { en: 'Hidden', es: 'Oculto' }, { en: 'Full', es: 'Completo' }],
     },
     jsUrl: { live: false, description: 'Emscripten glue URL. Defaults to ./blastem.js.' },
     wasmUrl: { live: false, description: 'WASM URL. Defaults to ./blastem.wasm.' },
