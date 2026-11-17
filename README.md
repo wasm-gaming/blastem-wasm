@@ -39,7 +39,7 @@ await play.destroy();       // saves flushed, loop stopped, audio closed
 
 | payload | keys |
 | --- | --- |
-| `config` | `region` (`auto` \| `us` \| `eu` \| `jp`), `renderFilter` (`pixelated` \| `smooth`, live), `jsUrl`, `wasmUrl` |
+| `config` | `region` (`auto` \| `us` \| `eu` \| `jp`); video, all live: `renderFilter` (`pixelated` \| `smooth`), `shader` (`standard` \| `sharp` \| `crt` \| `ntsc` \| `xbrz`), `scanlines` (boolean), `border` (`standard` \| `hidden` \| `full`); `jsUrl`, `wasmUrl` |
 | `options` | — |
 | `assets` | `rom` (`.bin`, `.gen`, `.md`, `.smd`; required) |
 | `storage` | `namespace` (default `default`), `persist` (`'opfs'` \| `null`) |
@@ -48,6 +48,14 @@ Events: the contract's `start`, `error`, `exit`, `pause`, `resume`, plus `saves`
 
 Controls are BlastEm's defaults: arrows, `A`/`S`/`D` (A/B/C), `Q`/`W`/`E` (X/Y/Z), `Enter` (Start),
 `` ` `` save state, `L` load state, `Tab` soft reset. Gamepads work through SDL2.
+
+## Video settings
+
+BlastEm's own: they go into its config tree, the `default.cfg` bundled in the wasm, before boot
+(`patchConfig()` + `videoEntries()`), and while the game runs through `web_set_config()` +
+`web_apply_video()` (scripts/web_bridge.c, scripts/web_render_bridge.c), which rebuild the renderer
+as upstream's settings menu does. `renderFilter: 'pixelated'` sets BlastEm's `scaling nearest`
+too: the canvas' `image-rendering` alone only sharpens an already smoothed picture.
 
 ## Saves live in the engine's own folder
 
