@@ -34,7 +34,7 @@ const SIDES = ['top', 'bottom', 'left', 'right'];
 /** The config entries behind the video settings (unknown values fall back to the defaults). */
 export function videoEntries(config: BlastemConfig): ConfigEntry[] {
   const [fragment, vertex] = SHADERS[config.shader ?? 'standard'] ?? SHADERS.standard;
-  const border = BORDERS[config.border ?? 'standard'] ?? BORDERS.standard;
+  const border = BORDERS[config.border ?? 'hidden'] ?? BORDERS.hidden;
   const entries: ConfigEntry[] = [
     // BlastEm scales the picture to the canvas itself: sharp pixels need nearest here,
     // the canvas' image-rendering alone only sharpens BlastEm's already-smoothed picture.
